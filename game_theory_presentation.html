@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>게임이론과 내시균형으로 합리적인 결정하는 법</title>
+  <style>
+    :root {
+      --bg: #fbfbfd;
+      --paper: rgba(255,255,255,0.96);
+      --paper-2: rgba(255,255,255,0.88);
+      --text: #152238;
+      --muted: #637083;
+      --navy: #1f3b63;
+      --navy-2: #335d94;
+      --red: #d24a4a;
+      --green: #2b8a57;
+      --line: rgba(31,59,99,0.10);
+      --shadow: 0 16px 42px rgba(18, 28, 45, 0.10);
+      --shadow-soft: 0 10px 24px rgba(18, 28, 45, 0.07);
+      --radius: 28px;
+      --radius-sm: 18px;
+      --font: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%; margin: 0; overflow: hidden;
+      font-family: var(--font);
+      background:
+        radial-gradient(circle at 20% 15%, rgba(31,59,99,0.035), transparent 22%),
+        radial-gradient(circle at 80% 10%, rgba(210,74,74,0.04), transparent 18%),
+        linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+      color: var(--text);
+    }
+
+    .deck {
+      position: relative;
+      width: 100vw; height: 100vh;
+      overflow: hidden;
+      background-image:
+        linear-gradient(90deg, rgba(31,59,99,0.03) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(31,59,99,0.03) 1px, transparent 1px);
+      background-size: 72px 72px;
+      background-position: center;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: clamp(20px, 3vw, 42px);
+      opacity: 0;
+      transform: translateY(16px) scale(0.988);
+      pointer-events: none;
+      transition: opacity .42s ease, transform .42s cubic-bezier(.2,.8,.2,1);
+    }
+    .slide.active {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+      z-index: 2;
+    }
+
+    .canvas {
+      width: min(1280px, 100%);
+      height: min(720px, 100%);
+      background: var(--paper);
+      border: 1px solid rgba(31,59,99,0.10);
+      border-radius: 32px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(8px);
+    }
+
+    .slide-number {
+      position: absolute;
+      right: 22px;
+      top: 18px;
+      font-size: 12px;
+      letter-spacing: .16em;
+      color: rgba(31,59,99,0.35);
+      user-select: none;
+    }
+
+    .topbar {
+      position: absolute;
+      left: 28px;
+      right: 110px;
+      top: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      font-size: 14px;
+      color: var(--muted);
+      user-select: none;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(31,59,99,0.06);
+      border: 1px solid rgba(31,59,99,0.08);
+      color: var(--navy);
+      font-weight: 700;
+      white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .content {
+      width: 100%; height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 80px 42px 40px;
+    }
+
+    .hero {
+      text-align: center;
+      width: min(980px, 100%);
+      animation: rise .65s ease both;
+    }
+    .title {
+      margin: 0;
+      font-size: clamp(40px, 4vw, 68px);
+      line-height: 1.08;
+      letter-spacing: -0.055em;
+      color: var(--text);
+      font-weight: 900;
+    }
+    .divider {
+      width: 180px; height: 4px; border-radius: 999px;
+      margin: 26px auto 22px;
+      background: linear-gradient(90deg, var(--navy), var(--red));
+      transform-origin: center;
+      animation: scaleIn .72s .15s ease both;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: clamp(18px, 1.55vw, 24px);
+      line-height: 1.6;
+      margin: 0;
+    }
+    .meta-row {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    .meta {
+      padding: 12px 16px;
+      border-radius: 16px;
+      background: #fff;
+      border: 1px solid rgba(31,59,99,0.08);
+      box-shadow: var(--shadow-soft);
+      font-size: 15px;
+      line-height: 1.4;
+    }
+    .meta strong { color: var(--navy); }
+    .name-card {
+      margin-top: 26px;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, #fff, #f7f9fc);
+      border: 1px solid rgba(31,59,99,0.10);
+      box-shadow: var(--shadow-soft);
+      font-size: 17px;
+      font-weight: 800;
+    }
+    .name-card .dot {
+      width: 12px; height: 12px; border-radius: 999px;
+      background: var(--navy);
+      box-shadow: 0 0 0 6px rgba(31,59,99,0.08);
+    }
+
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+    .section-title {
+      margin: 0;
+      font-size: clamp(28px, 2.5vw, 40px);
+      letter-spacing: -0.05em;
+      color: var(--navy);
+      font-weight: 900;
+    }
+    .section-kicker {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      white-space: nowrap;
+    }
+
+    .grid-two {
+      display: grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap: 22px;
+      width: 100%;
+      align-items: stretch;
+    }
+    .card {
+      background: var(--paper-2);
+      border: 1px solid rgba(31,59,99,0.08);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-soft);
+      padding: 22px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card .cap {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .soft { background: linear-gradient(180deg, #fff, #fbfcff); }
+
+    .prisoners {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: center;
+    }
+    .prisoner {
+      border-radius: 24px;
+      padding: 20px;
+      border: 1px solid rgba(31,59,99,0.10);
+      background: linear-gradient(180deg, #fff, #f8fafc);
+      min-height: 168px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .prisoner::after {
+      content: '';
+      position: absolute;
+      right: -30px; bottom: -50px;
+      width: 180px; height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(31,59,99,0.08), transparent 68%);
+    }
+    .avatar {
+      font-size: 50px;
+      line-height: 1;
+      filter: drop-shadow(0 6px 16px rgba(0,0,0,.08));
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(31,59,99,0.06);
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 800;
+      width: fit-content;
+    }
+    .badge.red { background: rgba(210,74,74,0.10); color: var(--red); }
+    .badge.green { background: rgba(43,138,87,0.10); color: var(--green); }
+    .arrow-col {
+      display: grid;
+      place-items: center;
+      gap: 10px;
+      min-width: 64px;
+    }
+    .lock {
+      width: 54px; height: 54px;
+      border-radius: 18px;
+      display: grid; place-items: center;
+      background: linear-gradient(180deg, #eff4fa, #e8edf5);
+      border: 1px solid rgba(31,59,99,0.10);
+      font-size: 28px;
+      animation: bob 3s ease-in-out infinite;
+    }
+    .arrow {
+      width: 58px; height: 18px; position: relative;
+      opacity: .72;
+    }
+    .arrow::before {
+      content: '';
+      position: absolute; left: 0; top: 50%;
+      width: 100%; height: 2px;
+      transform: translateY(-50%);
+      background: var(--navy);
+      border-radius: 999px;
+    }
+    .arrow::after {
+      content: '';
+      position: absolute; right: 0; top: 50%;
+      width: 12px; height: 12px;
+      transform: translateY(-50%) rotate(45deg);
+      border-top: 2px solid var(--navy);
+      border-right: 2px solid var(--navy);
+    }
+
+    .choice-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 18px;
+    }
+    .choice {
+      border-radius: 18px;
+      padding: 16px 14px;
+      background: rgba(31,59,99,0.04);
+      border: 1px solid rgba(31,59,99,0.08);
+      text-align: center;
+      font-weight: 800;
+      color: var(--navy);
+      min-height: 70px;
+      display: grid;
+      place-items: center;
+      transition: transform .22s ease, background .22s ease, border-color .22s ease, box-shadow .22s ease;
+      cursor: pointer;
+      user-select: none;
+    }
+    .choice:hover,
+    .choice.active {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-soft);
+      border-color: rgba(31,59,99,0.18);
+      background: rgba(31,59,99,0.08);
+    }
+    .choice.red:hover,
+    .choice.red.active {
+      background: rgba(210,74,74,0.12);
+      border-color: rgba(210,74,74,0.18);
+      color: var(--red);
+    }
+    .choice.green:hover,
+    .choice.green.active {
+      background: rgba(43,138,87,0.12);
+      border-color: rgba(43,138,87,0.18);
+      color: var(--green);
+    }
+    .result-box {
+      margin-top: 16px;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .result {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: #fff;
+      border: 1px solid rgba(31,59,99,0.10);
+      box-shadow: var(--shadow-soft);
+      min-height: 76px;
+    }
+    .result strong { display: block; color: var(--navy); margin-bottom: 4px; }
+    .result .small { color: var(--muted); font-size: 14px; line-height: 1.45; }
+
+    .definition {
+      padding: 18px 20px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(31,59,99,0.05), rgba(31,59,99,0.02));
+      border: 1px solid rgba(31,59,99,0.10);
+      font-size: clamp(18px, 1.72vw, 24px);
+      font-weight: 800;
+      line-height: 1.5;
+      color: var(--text);
+    }
+    .muted {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.65;
+    }
+    .tiny { color: rgba(99,112,131,.82); font-size: 12px; }
+
+    .buffalo-stage {
+      position: relative;
+      min-height: 420px;
+      border-radius: 28px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 100%, rgba(43,138,87,0.14), transparent 28%),
+        linear-gradient(180deg, #ffffff 0%, #f5f8f3 100%);
+      border: 1px solid rgba(31,59,99,0.08);
+    }
+    .buffalo-stage .ground {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 130px;
+      background: linear-gradient(180deg, rgba(43,138,87,0.08), rgba(43,138,87,0.16));
+      border-top: 1px solid rgba(43,138,87,0.15);
+    }
+    .buffalo-note {
+      position: absolute; left: 22px; top: 22px;
+      max-width: 410px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.90);
+      border: 1px solid rgba(31,59,99,0.08);
+      box-shadow: var(--shadow-soft);
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--text);
+      z-index: 2;
+    }
+    .buffalo-note strong { color: var(--navy); }
+    .lion, .buffalo {
+      position: absolute;
+      user-select: none;
+      display: grid;
+      place-items: center;
+      filter: drop-shadow(0 10px 24px rgba(0,0,0,.10));
+    }
+    .lion {
+      left: 10%; bottom: 110px;
+      font-size: 84px;
+      z-index: 3;
+    }
+    .buffalo {
+      bottom: 88px;
+      font-size: 62px;
+      transition: transform .8s cubic-bezier(.18,.82,.2,1), opacity .35s ease;
+      z-index: 2;
+    }
+    .buffalo.b1 { left: 70%; }
+    .buffalo.b2 { left: 78%; }
+    .buffalo.b3 { left: 86%; }
+    .buffalo.b4 { left: 94%; }
+    .buffalo.running { transform: translateX(-560px); }
+    .buffalo.near { transform: translateX(-400px); }
+    .buffalo.recoil { transform: translateX(-370px) translateY(-4px); }
+    .danger-line {
+      position: absolute;
+      left: 16%; right: 18%; bottom: 214px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(210,74,74,0.55), transparent);
+      transform: scaleX(0);
+      transform-origin: center;
+      transition: transform .55s ease;
+      z-index: 1;
+    }
+    .buffalo-label {
+      position: absolute; right: 22px; bottom: 20px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.90);
+      border: 1px solid rgba(31,59,99,0.08);
+      box-shadow: var(--shadow-soft);
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 800;
+      z-index: 4;
+    }
+
+    .road {
+      position: relative;
+      min-height: 420px;
+      border-radius: 28px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(31,59,99,0.02), rgba(31,59,99,0.01)),
+        linear-gradient(180deg, #ffffff 0%, #fafbfd 100%);
+      border: 1px solid rgba(31,59,99,0.08);
+    }
+    .road::before {
+      content: '';
+      position: absolute;
+      inset: 50% 0 auto 0;
+      height: 6px;
+      transform: translateY(-50%);
+      background: linear-gradient(90deg, transparent 0 4%, rgba(31,59,99,0.16) 4% 8%, transparent 8% 12%, rgba(31,59,99,0.16) 12% 16%, transparent 16% 20%, rgba(31,59,99,0.16) 20% 24%, transparent 24% 28%, rgba(31,59,99,0.16) 28% 32%, transparent 32% 36%, rgba(31,59,99,0.16) 36% 40%, transparent 40% 44%, rgba(31,59,99,0.16) 44% 48%, transparent 48% 52%, rgba(31,59,99,0.16) 52% 56%, transparent 56% 60%, rgba(31,59,99,0.16) 60% 64%, transparent 64% 68%, rgba(31,59,99,0.16) 68% 72%, transparent 72% 76%, rgba(31,59,99,0.16) 76% 80%, transparent 80% 84%, rgba(31,59,99,0.16) 84% 88%, transparent 88% 100%);
+      opacity: .72;
+    }
+    .road-ui {
+      position: absolute; left: 24px; right: 24px; top: 22px;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
+      z-index: 3;
+      pointer-events: none;
+    }
+    .pill {
+      padding: 11px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(31,59,99,0.08);
+      box-shadow: var(--shadow-soft);
+      color: var(--navy);
+      font-weight: 800;
+      font-size: 14px;
+    }
+    .car {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 90px;
+      filter: drop-shadow(0 12px 24px rgba(0,0,0,.12));
+      user-select: none;
+      transition: left 1.25s cubic-bezier(.2,.85,.2,1), transform .25s ease, opacity .2s ease;
+      z-index: 2;
+    }
+    .car.left { left: 10%; }
+    .car.right { left: 80%; transform: translateY(-50%) scaleX(-1); }
+    .car.flip { transform: translateY(-50%) scaleX(-1); }
+    .car.shake { animation: shake .55s ease both; }
+    .car.bump { animation: bump .28s ease both; }
+    .impact {
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 0; height: 0;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 4;
+    }
+    .impact::before,
+    .impact::after {
+      content: '';
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 0; height: 0;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      opacity: 0;
+    }
+    .impact.flash::before {
+      animation: burst .55s ease-out both;
+      border: 4px solid rgba(210,74,74,0.24);
+    }
+    .impact.flash::after {
+      animation: burst .55s .08s ease-out both;
+      border: 4px solid rgba(31,59,99,0.18);
+    }
+    .chicken-caption {
+      position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
+      display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+      max-width: 92%;
+      z-index: 3;
+    }
+    .chip {
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(31,59,99,0.06);
+      border: 1px solid rgba(31,59,99,0.08);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 18px;
+    }
+    .summary-card {
+      min-height: 160px;
+      padding: 18px;
+      border-radius: 22px;
+      background: #fff;
+      border: 1px solid rgba(31,59,99,0.10);
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .summary-card h3 {
+      margin: 0;
+      font-size: 19px;
+      color: var(--navy);
+      letter-spacing: -0.04em;
+      font-weight: 900;
+    }
+    .summary-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+    .final-quote {
+      margin-top: 22px;
+      text-align: center;
+      font-size: clamp(24px, 2.2vw, 36px);
+      font-weight: 900;
+      color: var(--text);
+      letter-spacing: -0.05em;
+      line-height: 1.25;
+    }
+    .final-quote span { color: var(--navy); }
+
+    .controls {
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
+      display: flex;
+      gap: 10px;
+      z-index: 10;
+      user-select: none;
+    }
+    .btn {
+      border: 1px solid rgba(31,59,99,0.12);
+      background: rgba(255,255,255,0.95);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 10px 14px;
+      cursor: pointer;
+      box-shadow: var(--shadow-soft);
+      font-weight: 800;
+      transition: transform .18s ease, border-color .18s ease, background .18s ease;
+    }
+    .btn:hover { transform: translateY(-1px); border-color: rgba(31,59,99,0.22); }
+    .btn.primary { background: var(--navy); color: #fff; border-color: transparent; }
+
+    .progress {
+      position: absolute;
+      left: 0; bottom: 0;
+      width: 100%; height: 6px;
+      background: rgba(31,59,99,0.06);
+      overflow: hidden;
+    }
+    .bar {
+      width: 0%; height: 100%;
+      background: linear-gradient(90deg, var(--navy), var(--red));
+      transition: width .32s ease;
+    }
+    .hint {
+      position: absolute;
+      left: 18px; bottom: 16px;
+      font-size: 12px;
+      color: rgba(31,59,99,0.42);
+      user-select: none;
+    }
+
+    .fade-in { animation: fadeIn .42s ease both; }
+    .slide-up { animation: slideUp .48s ease both; }
+    .pop { animation: pop .42s ease both; }
+    .pulse { animation: pulse 1.3s ease-in-out infinite; }
+
+    @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pop { 0% { opacity: 0; transform: scale(.96); } 100% { opacity: 1; transform: scale(1); } }
+    @keyframes scaleIn { from { transform: scaleX(.2); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+    @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+    @keyframes pulse { 0%,100% { transform: scale(1); opacity: .8; } 50% { transform: scale(1.03); opacity: 1; } }
+    @keyframes burst {
+      0% { width: 0; height: 0; opacity: .0; }
+      18% { width: 0; height: 0; opacity: 1; }
+      100% { width: 210px; height: 210px; opacity: 0; }
+    }
+    @keyframes shake {
+      0% { transform: translateY(-50%) translateX(0); }
+      20% { transform: translateY(-50%) translateX(-4px) rotate(-1deg); }
+      40% { transform: translateY(-50%) translateX(4px) rotate(1deg); }
+      60% { transform: translateY(-50%) translateX(-3px) rotate(-.8deg); }
+      80% { transform: translateY(-50%) translateX(3px) rotate(.8deg); }
+      100% { transform: translateY(-50%) translateX(0); }
+    }
+    @keyframes bump {
+      0% { transform: translateY(-50%) scale(1); }
+      50% { transform: translateY(-50%) scale(1.05); }
+      100% { transform: translateY(-50%) scale(1); }
+    }
+
+    @media (max-width: 980px) {
+      .grid-two { grid-template-columns: 1fr; }
+      .summary-grid { grid-template-columns: 1fr; }
+      .prisoners { grid-template-columns: 1fr; }
+      .choice-grid { grid-template-columns: 1fr; }
+      .result-box { grid-template-columns: 1fr; }
+      .section-head { flex-direction: column; align-items: flex-start; }
+      .canvas { height: min(760px, 100%); }
+      .car { font-size: 78px; }
+      .lion { font-size: 72px; }
+      .buffalo { font-size: 56px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="deck" id="deck">
+    <!-- 1. Cover -->
+    <section class="slide active" data-slide="0">
+      <div class="canvas">
+        <div class="slide-number">01</div>
+        <div class="content">
+          <div class="hero">
+            <div class="topbar" style="justify-content:center; left:0; right:0; top:24px; position:absolute;">
+              <div class="tag">비문학으로 세상과 소통하기 - 주제 발표 원고</div>
+            </div>
+            <h1 class="title" style="margin-top:58px;">게임이론과 내시균형으로<br>합리적인 결정하는 법</h1>
+            <div class="divider"></div>
+            <p class="subtitle">『N분의 1의 함정』을 읽고</p>
+            <div class="meta-row">
+              <div class="meta"><strong>책 제목</strong> : N분의 1의 함정</div>
+              <div class="meta"><strong>저자</strong> : 하임 샤피라</div>
+            </div>
+            <div class="name-card"><span class="dot"></span> 강지운 · 2학년 1반 3번</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Prisoner's dilemma -->
+    <section class="slide" data-slide="1">
+      <div class="canvas">
+        <div class="slide-number">02</div>
+        <div class="topbar">
+          <div class="tag">우선 가장 유명한 게임이론인 죄수의 딜레마</div>
+          <div>마우스를 올리면 결과가 바뀝니다</div>
+        </div>
+        <div class="content" style="padding-top: 86px;">
+          <div style="width:100%;">
+            <div class="section-head">
+              <h2 class="section-title">죄수의 딜레마</h2>
+              <p class="section-kicker">서로 의사소통을 할 수 없게 분리된 두 용의자</p>
+            </div>
+            <div class="grid-two">
+              <div class="card soft">
+                <div class="prisoners">
+                  <div class="prisoner">
+                    <div class="badge">용의자 A</div>
+                    <div class="avatar">🧑‍💼</div>
+                    <div class="muted">침묵과 배신 중 선택</div>
+                  </div>
+                  <div class="arrow-col">
+                    <div class="lock" id="lockIcon">🔒</div>
+                    <div class="arrow"></div>
+                    <div class="tiny">의사소통 불가</div>
+                  </div>
+                  <div class="prisoner">
+                    <div class="badge">용의자 B</div>
+                    <div class="avatar">🧑‍💼</div>
+                    <div class="muted">침묵과 배신 중 선택</div>
+                  </div>
+                </div>
+
+                <div class="choice-grid" style="margin-top:20px;">
+                  <div class="choice" id="optSS" data-result="ss">둘 다 침묵</div>
+                  <div class="choice red" id="optDD" data-result="dd">둘 다 배신</div>
+                  <div class="choice green" id="optSD" data-result="sd">한 명만 배신</div>
+                </div>
+
+                <div class="result-box" style="margin-top:18px;">
+                  <div class="result" id="resA"><strong>A 결과</strong><div class="small">마우스를 선택지에 올려보세요.</div></div>
+                  <div class="result" id="resB"><strong>B 결과</strong><div class="small">마우스를 선택지에 올려보세요.</div></div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="cap">설명 보조</div>
+                <div class="definition" id="pdQuestion">A와 B는 서로 대화할 수 없습니다. 둘은 침묵 또는 배신을 선택합니다.</div>
+                <div style="height:16px"></div>
+                <div class="muted">선택에 따라 결과가 바로 바뀝니다.</div>
+                <div style="height:20px"></div>
+                <div class="card" style="padding:16px 18px; background: rgba(31,59,99,0.04); box-shadow:none;">
+                  <div class="cap">핵심 질문</div>
+                  <div style="font-size:22px; line-height:1.42; font-weight:900; color:var(--navy);">A, B가 취할 수 있는 가장 좋은 전략은?</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Nash equilibrium -->
+    <section class="slide" data-slide="2">
+      <div class="canvas">
+        <div class="slide-number">03</div>
+        <div class="topbar">
+          <div class="tag">두 선수 모두가 결정을 바꾸면 손해가 되는 상태</div>
+          <div>내시균형</div>
+        </div>
+        <div class="content" style="padding-top: 92px;">
+          <div class="card" style="width:min(980px,100%); text-align:center;">
+            <div class="cap">내시균형</div>
+            <h2 class="section-title" style="margin-bottom: 14px;">전략이 고정되는 순간</h2>
+            <div style="display:grid; grid-template-columns:1fr auto 1fr; gap:18px; align-items:center; margin-top:14px;">
+              <div class="card" style="padding:22px; min-height:170px; display:grid; place-items:center;">
+                <div class="badge">A의 선택</div>
+                <div style="font-size:42px; margin-top:12px; font-weight:900;">배신</div>
+                <div class="muted" style="margin-top:8px;">상대 전략을 고려해도 바꾸기 어려움</div>
+              </div>
+              <div class="arrow-col">
+                <div class="arrow pulse"></div>
+                <div style="color:var(--navy); font-weight:900; font-size:14px;">상호 고정</div>
+                <div class="arrow pulse" style="transform:scaleX(-1);"></div>
+              </div>
+              <div class="card" style="padding:22px; min-height:170px; display:grid; place-items:center;">
+                <div class="badge">B의 선택</div>
+                <div style="font-size:42px; margin-top:12px; font-weight:900;">배신</div>
+                <div class="muted" style="margin-top:8px;">누구도 일방적으로 바꾸면 손해</div>
+              </div>
+            </div>
+            <div class="definition" style="margin-top: 22px;">두 선수 모두가 자신의 결정을 바꾸면 손해가 돼서 바꾸지 않을 균형이 이루어진 상태</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Buffalo -->
+    <section class="slide" data-slide="3">
+      <div class="canvas">
+        <div class="slide-number">04</div>
+        <div class="topbar">
+          <div class="tag">자연에서 내시균형이 이뤄지는 상황</div>
+          <div>버펄로떼 예시</div>
+        </div>
+        <div class="content" style="padding-top: 88px;">
+          <div style="width:100%; display:grid; grid-template-columns: 1fr 380px; gap: 22px; align-items: stretch;">
+            <div class="buffalo-stage" id="buffaloStage">
+              <div class="buffalo-note">
+                <strong>설명 포인트</strong><br>
+                사자가 버펄로떼를 사냥하러 오는 상황을 생각해보면 버펄로들은 사자에게 달려들면 사자를 이길 수 있지만 그런 일이 일어나지 않습니다.
+              </div>
+              <div class="danger-line" id="dangerLine"></div>
+              <div class="lion" id="lion">🦁</div>
+              <div class="buffalo b1" id="b1">🐃</div>
+              <div class="buffalo b2" id="b2">🐃</div>
+              <div class="buffalo b3" id="b3">🐃</div>
+              <div class="buffalo b4" id="b4">🐃</div>
+              <div class="ground"></div>
+              <div class="buffalo-label" id="buffaloLabel">함께 돌진 → 일부 위험 → 뒤로 빠짐</div>
+            </div>
+            <div class="card">
+              <div class="cap">내시균형과 연결</div>
+              <div class="definition" style="margin-bottom:16px;">모든 버펄로가 달려들면 그중 몇몇은 다치게 되고, 그러면 모두가 달려들 때 혼자 뒤로 빠지는 전략이 다치지 않을 수 있습니다.</div>
+              <div class="muted">이렇게 보면 개인에게 유리한 선택이 반복되면서 위의 역전상황이 쉽게 일어나지 않게 됩니다.</div>
+              <div style="height:18px"></div>
+              <div class="card" style="padding:16px 18px; background:rgba(43,138,87,0.06); box-shadow:none;">
+                <div class="cap">결론</div>
+                <div style="font-size:22px; line-height:1.48; font-weight:900; color:var(--green);">모든 버펄로가 그 전략을 선택하므로 위의 역전상황은 일어나지 않습니다.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Chicken game -->
+    <section class="slide" data-slide="4">
+      <div class="canvas">
+        <div class="slide-number">05</div>
+        <div class="topbar">
+          <div class="tag">마지막 예시: 치킨게임</div>
+          <div>충돌 애니메이션 포함</div>
+        </div>
+        <div class="content" style="padding-top: 86px;">
+          <div style="width:100%; display:grid; grid-template-columns: 1fr 350px; gap: 22px; align-items: stretch;">
+            <div class="road" id="road">
+              <div class="road-ui">
+                <div class="pill">두 운전자가 서로 맞은편에서 달려오는 상황</div>
+                <div class="pill">그대로 가면 충돌</div>
+              </div>
+              <div class="car left" id="carL">🚗</div>
+              <div class="car right" id="carR">🚗</div>
+              <div class="impact" id="impact"></div>
+              <div class="chicken-caption">
+                <div class="chip">둘 다 직진 → 💥 충돌</div>
+                <div class="chip">한 명만 피함 → 겁쟁이 / 승자</div>
+                <div class="chip">둘 다 피함 → 승패 없음</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="cap">필승전략</div>
+              <div class="definition" style="margin-bottom:16px;">운전대를 뽑고 검은 선글라스를 끼고 자신이 무조건 달릴 것임을 상대에게 보여주는 것입니다.</div>
+              <div class="card" style="padding:16px 18px; box-shadow:none; background: rgba(210,74,74,0.06);">
+                <div class="cap">상대의 판단</div>
+                <div style="font-size:22px; line-height:1.48; font-weight:900; color:var(--red);">죽는 것보다 겁쟁이가 되는 쪽이 낫다고 판단해 피하게 됩니다.</div>
+              </div>
+              <div style="height:16px"></div>
+              <div class="muted"> </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. Conclusion -->
+    <section class="slide" data-slide="5">
+      <div class="canvas">
+        <div class="slide-number">06</div>
+        <div class="topbar">
+          <div class="tag">이런 예시들을 통해 게임이론과 내시균형에 대해 알아보았습니다</div>
+          <div>정리</div>
+        </div>
+        <div class="content" style="padding-top: 92px;">
+          <div style="width:100%;">
+            <div class="section-head">
+              <h2 class="section-title">정리</h2>
+              <p class="section-kicker">게임이론이 보여주는 현실의 선택</p>
+            </div>
+            <div class="summary-grid">
+              <div class="summary-card">
+                <h3>수학 퍼즐</h3>
+                <p>이러한 원리들을 사용하면 수학 퍼즐을 즐길 수 있습니다.</p>
+              </div>
+              <div class="summary-card">
+                <h3>자연의 합리성</h3>
+                <p>자연에서 동물들의 움직임이 얼마나 합리적인지도 볼 수 있습니다.</p>
+              </div>
+              <div class="summary-card">
+                <h3>협상 전략</h3>
+                <p>동등한 상황에서도 결국 한쪽이 우위에 서는 것을 이해하면 협상에도 도움이 됩니다.</p>
+              </div>
+            </div>
+            <div class="final-quote"><span>게임이론</span>은 현실의 선택을 이해하는 도구입니다.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. Ending -->
+    <section class="slide" data-slide="6">
+      <div class="canvas">
+        <div class="slide-number">07</div>
+        <div class="content">
+          <div class="hero">
+            <h1 class="title">들어주셔서 감사합니다</h1>
+            <div class="divider"></div>
+            <p class="subtitle">흥미가 생겼다면 ‘1달러 경매’, ‘지네 게임’, ‘켈리 공식’ 같은 다른 게임들도 찾아보면 좋습니다.</p>
+            <div class="meta-row">
+              <div class="meta">1달러 경매</div>
+              <div class="meta">지네 게임</div>
+              <div class="meta">켈리 공식</div>
+            </div>
+            <div class="name-card" style="margin-top: 34px;"><span class="dot"></span> 강지운</div>
+            <div style="margin-top: 16px; color: var(--muted); font-size: 14px;"> </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="controls">
+      <button class="btn" id="prevBtn">← 이전</button>
+      <button class="btn primary" id="nextBtn">다음 →</button>
+    </div>
+    <div class="hint">키보드: ← → / Space · 클릭으로 다음</div>
+    <div class="progress"><div class="bar" id="progressBar"></div></div>
+  </div>
+
+  <script>
+    const slides = [...document.querySelectorAll('.slide')];
+    const progressBar = document.getElementById('progressBar');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    let current = 0;
+
+    let prisonerTimer = null;
+    let buffaloTimer = null;
+    let chickenTimer = null;
+
+    function setActiveSlide(index) {
+      current = Math.max(0, Math.min(slides.length - 1, index));
+      slides.forEach((s, i) => s.classList.toggle('active', i === current));
+      progressBar.style.width = `${((current + 1) / slides.length) * 100}%`;
+      prevBtn.disabled = current === 0;
+      nextBtn.disabled = current === slides.length - 1;
+      prevBtn.style.opacity = prevBtn.disabled ? 0.45 : 1;
+      nextBtn.style.opacity = nextBtn.disabled ? 0.45 : 1;
+      resetSlideState(current);
+    }
+
+    function resetSlideState(index) {
+      clearTimeout(prisonerTimer);
+      clearTimeout(buffaloTimer);
+      clearTimeout(chickenTimer);
+
+      if (index === 1) initPrisonerHover();
+      if (index === 3) initBuffaloAnimation();
+      if (index === 4) initChickenAnimation();
+    }
+
+    // Slide 2: Hover-based prisoner dilemma
+    function initPrisonerHover() {
+      const choices = [...document.querySelectorAll('#optSS, #optDD, #optSD')];
+      const resA = document.getElementById('resA');
+      const resB = document.getElementById('resB');
+      const q = document.getElementById('pdQuestion');
+      const lock = document.getElementById('lockIcon');
+
+      const states = {
+        ss: {
+          a: '징역 1년', b: '징역 1년',
+          aClass: 'green', bClass: 'green',
+          note: '둘 다 침묵 → 1년'
+        },
+        dd: {
+          a: '징역 18년', b: '징역 18년',
+          aClass: 'red', bClass: 'red',
+          note: '둘 다 배신 → 18년'
+        },
+        sd: {
+          a: '석방', b: '징역 20년',
+          aClass: 'green', bClass: 'red',
+          note: '한 명만 배신 → 석방 / 20년'
+        }
+      };
+
+      const show = (key) => {
+        const s = states[key];
+        resA.innerHTML = `<strong>A 결과</strong><div class="small ${s.aClass}">${s.a}</div>`;
+        resB.innerHTML = `<strong>B 결과</strong><div class="small ${s.bClass}">${s.b}</div>`;
+        q.textContent = `A와 B는 서로 대화할 수 없습니다. ${s.note}.`;
+        choices.forEach(el => el.classList.remove('active'));
+        const active = document.getElementById(key === 'ss' ? 'optSS' : key === 'dd' ? 'optDD' : 'optSD');
+        active.classList.add('active');
+        lock.classList.remove('pulse');
+        void lock.offsetWidth;
+        lock.classList.add('pulse');
+      };
+
+      choices.forEach(el => {
+        el.addEventListener('mouseenter', () => show(el.dataset.result));
+        el.addEventListener('click', () => show(el.dataset.result));
+      });
+
+      show('ss');
+    }
+
+    // Slide 4: Buffalo straight charge animation
+    function initBuffaloAnimation() {
+      const stage = document.getElementById('buffaloStage');
+      const line = document.getElementById('dangerLine');
+      const label = document.getElementById('buffaloLabel');
+      const b1 = document.getElementById('b1');
+      const b2 = document.getElementById('b2');
+      const b3 = document.getElementById('b3');
+      const b4 = document.getElementById('b4');
+      const buffalos = [b1, b2, b3, b4];
+      const classes = ['running', 'running', 'running', 'running'];
+
+      const resetBuffalo = () => {
+        buffalos.forEach(b => b.classList.remove('running', 'near', 'recoil'));
+        // restart from right edge in a clean formation
+        b1.style.left = '70%';
+        b2.style.left = '78%';
+        b3.style.left = '86%';
+        b4.style.left = '94%';
+        void stage.offsetWidth;
+      };
+
+      const step1 = () => {
+        label.textContent = '함께 돌진';
+        line.style.transform = 'scaleX(1)';
+        b1.classList.add('running');
+        b2.classList.add('running');
+        b3.classList.add('running');
+        b4.classList.add('running');
+      };
+
+      const step2 = () => {
+        label.textContent = '가까워질수록 일부는 다칠 위험';
+        b1.classList.remove('running'); b2.classList.remove('running');
+        b3.classList.remove('running'); b4.classList.remove('running');
+        b1.classList.add('near'); b2.classList.add('near'); b3.classList.add('near'); b4.classList.add('near');
+      };
+
+      const step3 = () => {
+        label.textContent = '그 결과, 뒤로 빠지는 전략이 유리해짐';
+        b1.classList.remove('near'); b2.classList.remove('near'); b3.classList.remove('near'); b4.classList.remove('near');
+        b1.classList.add('recoil'); b2.classList.add('recoil'); b3.classList.add('recoil'); b4.classList.add('recoil');
+      };
+
+      resetBuffalo();
+      step1();
+      buffaloTimer = setTimeout(step2, 1600);
+      buffaloTimer = setTimeout(step3, 3200);
+      buffaloTimer = setTimeout(() => {
+        resetBuffalo();
+        step1();
+        buffaloTimer = setTimeout(step2, 1600);
+        buffaloTimer = setTimeout(step3, 3200);
+      }, 4900);
+    }
+
+    // Slide 5: Cleaner collision and reset
+    function initChickenAnimation() {
+      const carL = document.getElementById('carL');
+      const carR = document.getElementById('carR');
+      const impact = document.getElementById('impact');
+      const road = document.getElementById('road');
+
+      const reset = () => {
+        carL.classList.remove('shake', 'bump');
+        carR.classList.remove('shake', 'bump');
+        impact.classList.remove('flash');
+        carL.style.left = '10%';
+        carR.style.left = '80%';
+        carR.style.transform = 'translateY(-50%) scaleX(-1)';
+      };
+
+      const approach = () => {
+        carL.style.left = '38%';
+        carR.style.left = '54%';
+      };
+
+      const collide = () => {
+        impact.classList.add('flash');
+        carL.classList.add('shake');
+        carR.classList.add('shake');
+        carL.style.left = '47%';
+        carR.style.left = '47%';
+        carR.style.transform = 'translateY(-50%) scaleX(-1) rotate(-2deg)';
+      };
+
+      const resetAndLoop = () => {
+        reset();
+        setTimeout(approach, 250);
+        setTimeout(collide, 1450);
+        chickenTimer = setTimeout(resetAndLoop, 3900);
+      };
+
+      reset();
+      setTimeout(approach, 250);
+      setTimeout(collide, 1450);
+      chickenTimer = setTimeout(resetAndLoop, 3900);
+    }
+
+    function nextSlide() {
+      if (current < slides.length - 1) setActiveSlide(current + 1);
+    }
+    function prevSlide() {
+      if (current > 0) setActiveSlide(current - 1);
+    }
+
+    prevBtn.addEventListener('click', prevSlide);
+    nextBtn.addEventListener('click', nextSlide);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        nextSlide();
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prevSlide();
+      }
+    });
+
+    // Click anywhere (except buttons / choices) to advance
+    document.getElementById('deck').addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      if (e.target.closest('.choice')) return;
+      nextSlide();
+    });
+
+    setActiveSlide(0);
+  </script>
+</body>
+</html>
